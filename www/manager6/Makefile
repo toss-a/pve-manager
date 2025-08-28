@@ -197,6 +197,12 @@ JSSRC= 							\
 	lxc/DeviceEdit.js				\
 	lxc/DNS.js					\
 	lxc/FeaturesEdit.js				\
+	lxc/InitCmdEdit.js				\
+	lxc/InitCmdInputPanel.js			\
+	lxc/AutomountEdit.js				\
+	lxc/AutomountInputPanel.js			\
+	lxc/EntryEdit.js				\
+	lxc/EntryInputPanel.js				\
 	lxc/MPEdit.js					\
 	lxc/MPResize.js					\
 	lxc/Network.js					\
