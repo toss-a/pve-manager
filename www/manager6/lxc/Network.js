@@ -358,25 +358,66 @@ Ext.define(
 
             Proxmox.Utils.setErrorMask(me, true);
 
+            let nodename = me.pveSelNode.data.node;
+            let vmid = me.pveSelNode.data.vmid;
+
             Proxmox.Utils.API2Request({
-                url: me.url,
-                failure: function (response, opts) {
+                url: `/nodes/${nodename}/lxc/${vmid}/interfaces`,
+                method: 'GET',
+                failure: function(response, opts) {
                     Proxmox.Utils.setErrorMask(me, gettext('Error') + ': ' + response.htmlStatus);
                 },
-                success: function (response, opts) {
-                    Proxmox.Utils.setErrorMask(me, false);
-                    let result = Ext.decode(response.responseText);
-                    me.dataCache = result.data || {};
-                    let records = [];
-                    for (const [key, value] of Object.entries(me.dataCache)) {
-                        if (key.match(/^net\d+/)) {
-                            let net = PVE.Parser.parseLxcNetwork(value);
-                            net.id = key;
-                            records.push(net);
-                        }
-                    }
-                    me.store.loadData(records);
-                    me.down('button[name=addButton]').setDisabled(records.length >= 32);
+                success: function(ifResponse, ifOpts) {
+                    Proxmox.Utils.API2Request({
+                        url: me.url,
+                        failure: function(response, opts) {
+                            Proxmox.Utils.setErrorMask(me, gettext('Error') + ': ' + response.htmlStatus);
+                        },
+                        success: function(confResponse, confOpts) {
+                            Proxmox.Utils.setErrorMask(me, false);
+
+                            let interfaces = [];
+                            for (const [, iface] of Object.entries(ifResponse?.result?.data || {})) {
+                                interfaces[iface['hardware-address']] = iface;
+                            }
+
+                            me.dataCache = confResponse.result.data || {};
+                            let records = [];
+                            for (const [key, value] of Object.entries(me.dataCache)) {
+                                if (key.match(/^net\d+/)) {
+                                    let config = PVE.Parser.parseLxcNetwork(value);
+                                    let net = structuredClone(config);
+                                    net.id = key;
+
+                                    let iface = interfaces[config.hwaddr.toLowerCase()];
+                                    if (iface) {
+                                        net.name = iface.name;
+                                        net.ip = [];
+                                        for (const i of iface['ip-addresses']) {
+                                            let ip_with_prefix = `${i['ip-address']}/${i.prefix}`;
+                                            if (i['ip-address-type'] === "inet") {
+                                                if (config.ip === ip_with_prefix) {
+                                                    net.ip.push(`${ip_with_prefix} (static)`);
+                                                } else {
+                                                    net.ip.push(`${ip_with_prefix} (dhcp)`);
+                                                }
+                                            } else if (i['ip-address-type'] === "inet6") {
+                                                if (config.ip6 === ip_with_prefix) {
+                                                    net.ip.push(`${ip_with_prefix} (static)`);
+                                                } else {
+                                                    net.ip.push(`${ip_with_prefix} (dhcp)`);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    records.push(net);
+                                }
+                            }
+
+                            me.store.loadData(records);
+                            me.down('button[name=addButton]').setDisabled(records.length >= 32);
+                        },
+                    });
                 },
             });
         },
@@ -510,7 +551,7 @@ Ext.define(
                     },
                     {
                         header: gettext('VLAN Tag'),
-                        width: 80,
+                        width: 70,
                         dataIndex: 'tag',
                     },
                     {
@@ -520,16 +561,10 @@ Ext.define(
                     },
                     {
                         header: gettext('IP address'),
-                        width: 150,
+                        width: 200,
                         dataIndex: 'ip',
-                        renderer: function (value, metaData, rec) {
-                            if (rec.data.ip && rec.data.ip6) {
-                                return rec.data.ip + '<br>' + rec.data.ip6;
-                            } else if (rec.data.ip6) {
-                                return rec.data.ip6;
-                            } else {
-                                return rec.data.ip;
-                            }
+                        renderer: function(_value, _metaData, rec) {
+                            return rec.data.ip.join("<br>");
                         },
                     },
                     {
