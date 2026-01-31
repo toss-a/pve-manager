@@ -149,6 +149,11 @@ Ext.define('PVE.lxc.Options', {
                 defaultValue: Proxmox.Utils.noneText,
                 editor: 'PVE.lxc.FeaturesEdit',
             },
+			automount: {
+				header: gettext('lxc.mount.auto'),
+				defaultValue: Proxmox.Utils.noneText,
+				editor: 'PVE.lxc.AutomountEdit',
+			},
             hookscript: {
                 header: gettext('Hookscript'),
                 renderer: Ext.htmlEncode,
@@ -251,11 +256,22 @@ Ext.define('PVE.lxc.Options', {
 
         me.callParent();
 
+        me.store.addFilter(new Ext.util.Filter({
+            filterFn: function(item) {
+                let ostype = me.store.getById('ostype');
+                if (ostype && ostype.data.value !== 'oci') {
+                    return item.data.key !== 'automount';
+                }
+                return true;
+            }
+        }));
+
         me.on('activate', me.rstore.startUpdate);
         me.on('destroy', me.rstore.stopUpdate);
         me.on('deactivate', me.rstore.stopUpdate);
 
-        me.mon(me.getStore(), 'datachanged', function () {
+        me.mon(me.getStore(), 'datachanged', function() {
+            me.store.filter();
             set_button_status();
         });
     },

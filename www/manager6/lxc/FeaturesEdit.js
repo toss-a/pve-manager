@@ -35,6 +35,15 @@ Ext.define('PVE.lxc.FeaturesInputPanel', {
         },
         {
             xtype: 'proxmoxcheckbox',
+            fieldLabel: gettext('AutoDev'),
+            name: 'autodev',
+            bind: {
+            disabled: '{unprivileged}',
+            boxLabel: '{privilegedOnly}',
+            },
+        },
+        {
+            xtype: 'proxmoxcheckbox',
             fieldLabel: gettext('Nesting'),
             name: 'nesting',
         },

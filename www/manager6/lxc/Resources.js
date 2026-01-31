@@ -148,9 +148,91 @@ Ext.define('PVE.lxc.RessourceView', {
             };
         });
 
+	    let entryeditor = Proxmox.UserName === 'root@pam' ? 'PVE.lxc.EntryEdit' : undefined;
+
+	    PVE.Utils.forEachLxcEntry(function(i, confid) {
+	        rows[confid] = {
+		    group: 8,
+		    order: i,
+		    tdCls: 'pve-itype-icon-pci',
+		    editor: entryeditor,
+		    header: gettext('Entry') + ' (' + confid + ')',
+	        };
+	    });
+
         var baseurl = 'nodes/' + nodename + '/lxc/' + vmid + '/config';
 
         me.selModel = Ext.create('Ext.selection.RowModel', {});
+
+        var createAddMenu = function() {
+            return new Ext.menu.Menu({
+            listeners: {
+                beforeshow: function(menu) {
+                Proxmox.Utils.API2Request({
+                    url: `/api2/extjs/nodes/${nodename}/lxc/${vmid}/config`,
+                    method: 'GET',
+                    success: function(response) {
+                    let ostype = response.result.data.ostype;
+                    let mountEntry = menu.items.find(item => item.text === gettext('Mount Entry'));
+                    let devicePassthrough = menu.items.find(item => item.text === gettext('Device Passthrough'));
+                    if (mountEntry && devicePassthrough) {
+                        mountEntry.setHidden(ostype !== 'oci');
+                        devicePassthrough.setHidden(ostype === 'oci');
+                    }
+                    },
+                });
+                }
+            },
+            items: [
+                {
+                text: gettext('Mount Point'),
+                iconCls: 'fa fa-fw fa-hdd-o black',
+                disabled: !caps.vms['VM.Config.Disk'],
+                handler: function() {
+                    Ext.create('PVE.lxc.MountPointEdit', {
+                    autoShow: true,
+                    url: `/api2/extjs/${baseurl}`,
+                    unprivileged: me.getObjectValue('unprivileged'),
+                    pveSelNode: me.pveSelNode,
+                    listeners: {
+                        destroy: () => me.reload(),
+                    },
+                    });
+                },
+                },
+                {
+                text: gettext('Mount Entry'),
+                iconCls: 'pve-itype-icon-pci',
+                disabled: Proxmox.UserName !== 'root@pam',
+                handler: function() {
+                    Ext.create('PVE.lxc.EntryEdit', {
+                    autoShow: true,
+                    url: `/api2/extjs/${baseurl}`,
+                    pveSelNode: me.pveSelNode,
+                    listeners: {
+                        destroy: () => me.reload(),
+                    },
+                    });
+                },
+                },
+                {
+                text: gettext('Device Passthrough'),
+                iconCls: 'pve-itype-icon-pci',
+                disabled: Proxmox.UserName !== 'root@pam',
+                handler: function() {
+                    Ext.create('PVE.lxc.DeviceEdit', {
+                    autoShow: true,
+                    url: `/api2/extjs/${baseurl}`,
+                    pveSelNode: me.pveSelNode,
+                    listeners: {
+                        destroy: () => me.reload(),
+                    },
+                    });
+                },
+                },
+            ],
+            });
+        };
 
         var run_resize = function () {
             var rec = me.selModel.getSelection()[0];
@@ -323,6 +405,7 @@ Ext.define('PVE.lxc.RessourceView', {
             let isUnusedDisk = key.match(/^unused\d+/);
             let isUsedDisk = isDisk && !isUnusedDisk;
             let isDevice = key.match(/^dev\d+/);
+            let isEntry = key.match(/^entry\d+/);
 
             let noedit = isDelete || !rowdef.editor;
             if (!noedit && Proxmox.UserName !== 'root@pam' && key.match(/^mp\d+$/)) {
@@ -338,7 +421,7 @@ Ext.define('PVE.lxc.RessourceView', {
             reassign_menuitem.setDisabled(isRootFS);
             resize_menuitem.setDisabled(isUnusedDisk);
 
-            remove_btn.setDisabled(!(isDisk || isDevice) || isRootFS || !diskCap || pending);
+            remove_btn.setDisabled(!(isDisk || isDevice || isEntry) || isRootFS || !diskCap || pending);
             revert_btn.setDisabled(!pending);
 
             remove_btn.setText(isUsedDisk ? remove_btn.altText : remove_btn.defaultText);
@@ -369,66 +452,32 @@ Ext.define('PVE.lxc.RessourceView', {
             }
         };
 
-        Ext.apply(me, {
-            url: `/api2/json/nodes/${nodename}/lxc/${vmid}/pending`,
-            selModel: me.selModel,
-            interval: 2000,
-            cwidth1: 170,
-            tbar: [
-                {
-                    text: gettext('Add'),
-                    menu: new Ext.menu.Menu({
-                        items: [
-                            {
-                                text: gettext('Mount Point'),
-                                iconCls: 'fa fa-fw fa-hdd-o black',
-                                disabled: !caps.vms['VM.Config.Disk'],
-                                handler: function () {
-                                    Ext.create('PVE.lxc.MountPointEdit', {
-                                        autoShow: true,
-                                        url: `/api2/extjs/${baseurl}`,
-                                        unprivileged: me.getObjectValue('unprivileged'),
-                                        pveSelNode: me.pveSelNode,
-                                        listeners: {
-                                            destroy: () => me.reload(),
-                                        },
-                                    });
-                                },
-                            },
-                            {
-                                text: gettext('Device Passthrough'),
-                                iconCls: 'pve-itype-icon-pci',
-                                disabled: Proxmox.UserName !== 'root@pam',
-                                handler: function () {
-                                    Ext.create('PVE.lxc.DeviceEdit', {
-                                        autoShow: true,
-                                        url: `/api2/extjs/${baseurl}`,
-                                        pveSelNode: me.pveSelNode,
-                                        listeners: {
-                                            destroy: () => me.reload(),
-                                        },
-                                    });
-                                },
-                            },
-                        ],
-                    }),
-                },
-                edit_btn,
-                remove_btn,
-                volumeaction_btn,
-                revert_btn,
-            ],
-            rows: rows,
-            sorterFn: sorterFn,
-            editorConfig: {
-                pveSelNode: me.pveSelNode,
-                url: '/api2/extjs/' + baseurl,
-            },
-            listeners: {
-                itemdblclick: me.run_editor,
-                selectionchange: set_button_status,
-            },
-        });
+	    Ext.apply(me, {
+	        url: `/api2/json/nodes/${nodename}/lxc/${vmid}/pending`,
+	        selModel: me.selModel,
+	        interval: 2000,
+	        cwidth1: 170,
+	        tbar: [
+		    {
+		        text: gettext('Add'),
+		        menu: createAddMenu(),
+		    },
+		    edit_btn,
+		    remove_btn,
+		    volumeaction_btn,
+		    revert_btn,
+	        ],
+	        rows: rows,
+	        sorterFn: sorterFn,
+	        editorConfig: {
+		    pveSelNode: me.pveSelNode,
+		    url: '/api2/extjs/' + baseurl,
+	        },
+	        listeners: {
+		    itemdblclick: me.run_editor,
+		    selectionchange: set_button_status,
+	        },
+	    });
 
         me.callParent();
 
