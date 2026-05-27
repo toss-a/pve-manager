@@ -214,6 +214,10 @@ JSSRC= 							\
 	lxc/DNS.js					\
 	lxc/FeaturesEdit.js				\
 	lxc/EnvEdit.js				\
+	lxc/AutomountEdit.js				\
+	lxc/AutomountInputPanel.js			\
+	lxc/EntryEdit.js				\
+	lxc/EntryInputPanel.js				\
 	lxc/IdMapField.js				\
 	lxc/MPEdit.js					\
 	lxc/MPResize.js					\
